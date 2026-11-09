@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Client 1 | Live notification feed</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+    <style>
+        :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17231e; background: #f3f6f2; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 28px 16px; }
+        main { width: min(100%, 720px); padding: 38px; border: 1px solid #e3e9e3; border-radius: 22px; background: #fff; box-shadow: 0 18px 50px #19352312; }
+        .eyebrow { margin: 0 0 10px; color: #568366; font-size: .75rem; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+        h1 { margin: 0; font-size: clamp(1.8rem, 5vw, 2.4rem); letter-spacing: -.04em; }
+        .intro { margin: 12px 0 24px; color: #6b7770; line-height: 1.6; }
+        .connection { display: flex; align-items: center; gap: 9px; margin-bottom: 22px; color: #66736b; font-size: .9rem; }
+        .dot { width: 9px; height: 9px; border-radius: 50%; background: #d29a37; }
+        .dot.online { background: #27945b; box-shadow: 0 0 0 4px #27945b1a; }
+        .feed-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+        h2 { margin: 0; font-size: 1.05rem; }
+        .count { color: #7b877e; font-size: .82rem; }
+        .feed { display: grid; gap: 10px; max-height: 430px; overflow-y: auto; }
+        .empty { margin: 0; padding: 25px; border: 1px dashed #dfe6df; border-radius: 12px; color: #7b877e; text-align: center; font-size: .92rem; }
+        .notification { display: grid; grid-template-columns: 10px 1fr; gap: 13px; padding: 16px; border: 1px solid #e6ece6; border-radius: 12px; background: #f9fbf9; overflow-wrap: anywhere; }
+        .marker { width: 9px; height: 9px; margin-top: 6px; border-radius: 50%; background: #53a06a; }
+        .notification p { margin: 0; line-height: 1.5; }
+        .notification time { display: block; margin-top: 8px; color: #7b877e; font-size: .8rem; }
+        .links { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 25px; }
+        a { color: #39704b; font-size: .9rem; font-weight: 650; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        @media (max-width: 480px) { main { padding: 27px 21px; } }
+    </style>
+</head>
+<body>
+<main>
+    <p class="eyebrow">Subscriber · Client 1</p>
+    <h1>Live notification feed</h1>
+    <p class="intro">This page listens for admin broadcasts over WebSocket. Keep it open to see each new message arrive.</p>
+    <div class="connection"><span id="connectionDot" class="dot"></span><span id="connectionText">Connecting to live updates…</span></div>
+    <div class="feed-heading"><h2>Incoming notifications</h2><span id="messageCount" class="count">0 messages</span></div>
+    <section id="notifications" class="feed" aria-live="polite" aria-label="Incoming notifications">
+        <p id="emptyState" class="empty">Waiting for the first broadcast…</p>
+    </section>
+    <nav class="links" aria-label="Demo pages">
+        <a href="/admin">Admin broadcaster &rarr;</a>
+        <a href="/client2">Open Client 2 &rarr;</a>
+    </nav>
+</main>
+<script>
+    const feed = document.getElementById("notifications");
+    const emptyState = document.getElementById("emptyState");
+    const messageCount = document.getElementById("messageCount");
+    const connectionDot = document.getElementById("connectionDot");
+    const connectionText = document.getElementById("connectionText");
+    let count = 0;
+
+    function showNotification(notification) {
+        emptyState.remove();
+        const card = document.createElement("article");
+        card.className = "notification";
+        const marker = document.createElement("span");
+        marker.className = "marker";
+        marker.setAttribute("aria-hidden", "true");
+        const content = document.createElement("div");
+        const text = document.createElement("p");
+        text.textContent = notification.message;
+        const time = document.createElement("time");
+        time.dateTime = notification.timestamp;
+        time.textContent = new Date(notification.timestamp).toLocaleString();
+        content.append(text, time);
+        card.append(marker, content);
+        feed.prepend(card);
+        count += 1;
+        messageCount.textContent = `${count} ${count === 1 ? "message" : "messages"}`;
+    }
+
+    function connect() {
+        const stompClient = Stomp.over(new SockJS("/ws"));
+        stompClient.debug = null;
+        stompClient.connect({}, () => {
+            connectionDot.classList.add("online");
+            connectionText.textContent = "Connected · listening for broadcasts";
+            stompClient.subscribe("/topic/notifications", frame => showNotification(JSON.parse(frame.body)));
+        }, () => {
+            connectionDot.classList.remove("online");
+            connectionText.textContent = "Connection lost · reconnecting…";
+            window.setTimeout(connect, 3000);
+        });
+    }
+
+    connect();
+</script>
+</body>
+</html>

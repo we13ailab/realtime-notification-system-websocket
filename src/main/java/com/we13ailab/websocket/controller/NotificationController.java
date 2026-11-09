@@ -1,4 +1,4 @@
-package com.javatechie.controller;
+package com.we13ailab.websocket.controller;
 
 import java.time.Instant;
 

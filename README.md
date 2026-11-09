@@ -1,4 +1,4 @@
-# Real-time notification examples
+# WebSocket | Real-time notification examples
 
 This Spring Boot project includes two WebSocket demos, served by the same
 application and SockJS/STOMP endpoint at `/ws`.

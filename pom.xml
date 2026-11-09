@@ -8,10 +8,10 @@
 		<version>3.4.0</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.javatechie</groupId>
-	<artifactId>notification-system</artifactId>
+	<groupId>com.we13ailab</groupId>
+	<artifactId>websocket-notification-system</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>notification-system</name>
+	<name>websocket-notification-system</name>
 	<description>Demo project for Spring Boot</description>
 	<url/>
 	<licenses>
