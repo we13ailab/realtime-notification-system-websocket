@@ -2,50 +2,111 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Real-Time Notifications</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin | Live notification broadcaster</title>
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+    <style>
+        :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17231e; background: #f3f6f2; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 28px 16px; }
+        main { width: min(100%, 760px); padding: 38px; border: 1px solid #e3e9e3; border-radius: 22px; background: #fff; box-shadow: 0 18px 50px #19352312; }
+        .eyebrow { margin: 0 0 10px; color: #568366; font-size: .75rem; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+        h1 { margin: 0; font-size: clamp(1.8rem, 5vw, 2.4rem); letter-spacing: -.04em; }
+        .intro { margin: 12px 0 25px; color: #6b7770; line-height: 1.6; }
+        .connection { display: flex; align-items: center; gap: 9px; margin-bottom: 20px; color: #66736b; font-size: .9rem; }
+        .dot { width: 9px; height: 9px; border-radius: 50%; background: #d29a37; }
+        .dot.online { background: #27945b; box-shadow: 0 0 0 4px #27945b1a; }
+        form { display: flex; gap: 10px; }
+        input { min-width: 0; flex: 1; padding: 14px 16px; border: 1px solid #dfe6df; border-radius: 12px; color: inherit; font: inherit; outline: none; }
+        input:focus { border-color: #6b9b77; box-shadow: 0 0 0 3px #6b9b7720; }
+        button { padding: 14px 20px; border: 0; border-radius: 12px; background: #286744; color: #fff; font: inherit; font-weight: 680; cursor: pointer; transition: background .2s, transform .2s; }
+        button:hover:enabled { transform: translateY(-1px); background: #205638; }
+        button:disabled { cursor: not-allowed; opacity: .48; }
+        .feed-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 30px 0 12px; }
+        h2 { margin: 0; font-size: 1.05rem; }
+        .count { color: #7b877e; font-size: .82rem; }
+        .feed { display: grid; gap: 10px; max-height: 350px; overflow-y: auto; }
+        .empty { margin: 0; padding: 20px; border: 1px dashed #dfe6df; border-radius: 12px; color: #7b877e; text-align: center; font-size: .92rem; }
+        .notification { padding: 15px 17px; border: 1px solid #e6ece6; border-radius: 12px; background: #f9fbf9; overflow-wrap: anywhere; }
+        .notification p { margin: 0; line-height: 1.5; }
+        .notification time { display: block; margin-top: 8px; color: #7b877e; font-size: .8rem; }
+        .links { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 25px; }
+        a { color: #39704b; font-size: .9rem; font-weight: 650; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        @media (max-width: 540px) { main { padding: 27px 21px; } form { flex-direction: column; } button { width: 100%; } }
+    </style>
 </head>
 <body>
-<h1>Real-Time Notifications</h1>
-<div id="notifications"></div>
-<input type="text" id="message" placeholder="Enter your message">
-<button onclick="sendMessage()">Send</button>
-
+<main>
+    <p class="eyebrow">Real-time notifications · Admin</p>
+    <h1>Broadcast a message</h1>
+    <p class="intro">Send an update to every connected client. Messages travel over WebSocket and appear in each live feed instantly.</p>
+    <div class="connection"><span id="connectionDot" class="dot"></span><span id="connectionText">Connecting to live updates…</span></div>
+    <form id="messageForm">
+        <input id="messageInput" type="text" maxlength="500" placeholder="Write a notification for your clients…" aria-label="Notification message" required>
+        <button id="sendButton" type="submit" disabled>Send notification</button>
+    </form>
+    <div class="feed-heading"><h2>Broadcast activity</h2><span id="messageCount" class="count">0 messages</span></div>
+    <section id="notifications" class="feed" aria-live="polite" aria-label="Broadcast activity">
+        <p id="emptyState" class="empty">Your sent notifications will appear here.</p>
+    </section>
+    <nav class="links" aria-label="Client pages">
+        <a href="/client1">Open Client 1 &rarr;</a>
+        <a href="/client2">Open Client 2 &rarr;</a>
+    </nav>
+</main>
 <script>
-    let stompClient = null;
+    const form = document.getElementById("messageForm");
+    const input = document.getElementById("messageInput");
+    const sendButton = document.getElementById("sendButton");
+    const feed = document.getElementById("notifications");
+    const emptyState = document.getElementById("emptyState");
+    const messageCount = document.getElementById("messageCount");
+    const connectionDot = document.getElementById("connectionDot");
+    const connectionText = document.getElementById("connectionText");
+    let stompClient;
+    let count = 0;
+
+    function addNotification(notification) {
+        emptyState.remove();
+        const card = document.createElement("article");
+        card.className = "notification";
+        const text = document.createElement("p");
+        text.textContent = notification.message;
+        const time = document.createElement("time");
+        time.dateTime = notification.timestamp;
+        time.textContent = new Date(notification.timestamp).toLocaleString();
+        card.append(text, time);
+        feed.prepend(card);
+        count += 1;
+        messageCount.textContent = `${count} ${count === 1 ? "message" : "messages"}`;
+    }
 
     function connect() {
-    const socket = new SockJS('http://localhost:8080/ws');  // Correct the WebSocket URL
-    stompClient = Stomp.over(socket);
-
-    stompClient.connect({}, function (frame) {
-        console.log('Connected: ' + frame);  // Log the successful connection
-        stompClient.subscribe('/topic/notifications', function (message) {
-            showNotification(message.body);  // Handle incoming messages
+        stompClient = Stomp.over(new SockJS("/ws"));
+        stompClient.debug = null;
+        stompClient.connect({}, () => {
+            connectionDot.classList.add("online");
+            connectionText.textContent = "Connected · broadcasts are live";
+            sendButton.disabled = false;
+            stompClient.subscribe("/topic/notifications", frame => addNotification(JSON.parse(frame.body)));
+        }, () => {
+            connectionDot.classList.remove("online");
+            connectionText.textContent = "Connection lost · reconnecting…";
+            sendButton.disabled = true;
+            window.setTimeout(connect, 3000);
         });
-    }, function (error) {
-        console.error('WebSocket connection error: ' + error);  // Log WebSocket errors
-    });
-}
-
-
-  function sendMessage() {
-    const message = document.getElementById('message').value;
-    if (stompClient && stompClient.connected) {
-        stompClient.send('/app/sendMessage', {}, message);
-        console.log('Message sent:', message);
-    } else {
-        console.error('WebSocket connection is not established.');
     }
-}
 
-<!--    function showNotification(message) {-->
-<!--        const notifications = document.getElementById('notifications');-->
-<!--        const notification = document.createElement('p');-->
-<!--        notification.textContent = message;-->
-<!--        notifications.appendChild(notification);-->
-<!--    }-->
+    form.addEventListener("submit", event => {
+        event.preventDefault();
+        const message = input.value.trim();
+        if (!message || !stompClient || !stompClient.connected) return;
+        stompClient.send("/app/sendMessage", {}, message);
+        input.value = "";
+        input.focus();
+    });
 
     connect();
 </script>
